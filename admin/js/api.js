@@ -76,5 +76,14 @@ const api = {
 
   getStats() {
     return this.request('GET', '/tracking/stats/overview');
+  },
+
+  // Email (Zoho)
+  getEmailStatus() {
+    return this.request('GET', '/email/status');
+  },
+
+  sendEmail(payload, isFormData = false) {
+    return this.request('POST', '/email/send', payload, isFormData);
   }
 };
