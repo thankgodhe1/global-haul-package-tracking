@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>My Shipments – 66 Global Haul Zone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Header -->
+    <header class="home-header">
+      <div class="top-row">
+        <div class="user-greeting">
+          <div class="avatar" id="userAvatar">?</div>
+          <div class="greeting-text">
+            <div class="hello">Hello,</div>
+            <div class="name" id="userName">Guest</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" title="Logout" onclick="clearSession()" style="font-size:16px;">⏻</button>
+        </div>
+      </div>
+
+      <h1 class="hero-title">Your Shipments</h1>
+      <p class="hero-subtitle">Track, manage and follow all your packages</p>
+
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Enter another tracking number" autocomplete="off">
+        <button id="searchBtn" type="button">🔍</button>
+      </div>
+    </header>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <div class="action-card" style="cursor:default;opacity:0.85;">
+        <div class="icon blue">📦</div>
+        <div class="label">Send Parcel</div>
+      </div>
+      <div class="action-card" onclick="document.getElementById('searchInput').focus()">
+        <div class="icon orange">📍</div>
+        <div class="label">Track Parcel</div>
+      </div>
+      <div class="action-card" style="cursor:default;opacity:0.85;">
+        <div class="icon green">📝</div>
+        <div class="label">Get a Quote</div>
+      </div>
+      <div class="action-card" style="cursor:default;opacity:0.85;">
+        <div class="icon purple">🏠</div>
+        <div class="label">Home</div>
+      </div>
+    </div>
+
+    <!-- Active Shipments (dynamic only) -->
+    <section class="section">
+      <div class="section-header">
+        <h2>Active Shipments</h2>
+      </div>
+      <div class="shipment-list" id="shipmentList">
+        <div class="empty-state" style="padding:32px 16px;">
+          <div class="icon">📭</div>
+          <h3>Loading your shipments...</h3>
+        </div>
+      </div>
+    </section>
+
+    <!-- Promo -->
+    <div class="promo-banner">
+      <div class="text">
+        <h3>Send Worldwide</h3>
+        <p>Affordable rates to over 220 countries</p>
+        <button class="btn-promo" type="button" style="cursor:default;">Get Started</button>
+      </div>
+      <div class="illustration">✈️🌍</div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <nav class="bottom-nav">
+      <div class="nav-item active">
+        <span class="icon">🏠</span>
+        <span>Home</span>
+      </div>
+      <div class="nav-item">
+        <span class="icon">📍</span>
+        <span>Track</span>
+      </div>
+      <div class="nav-item" style="cursor:default;opacity:0.7;">
+        <span class="icon">📤</span>
+        <span>Send</span>
+      </div>
+      <div class="nav-item" style="cursor:default;opacity:0.7;">
+        <span class="icon">📝</span>
+        <span>Quote</span>
+      </div>
+      <div class="nav-item" onclick="clearSession()" title="Logout">
+        <span class="icon">⏻</span>
+        <span>Logout</span>
+      </div>
+    </nav>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    // ========== ACCESS CONTROL ==========
+    // User can only see this page if they have a valid session from a tracking lookup
+    function getUserContext() {
+      try {
+        const raw = sessionStorage.getItem('deliveryUser');
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    const ctx = getUserContext();
+    if (!ctx || !ctx.email || !ctx.name) {
+      // No valid session → force back to landing page
+      window.location.replace('index.html');
+      throw new Error('Unauthorized – redirecting to landing page');
+    }
+
+    // ========== RENDER ==========
+    document.getElementById('userName').textContent = ctx.name;
+    document.getElementById('userAvatar').textContent = (ctx.name || '?').charAt(0).toUpperCase();
+
+    function renderShipments(shipments) {
+      const list = document.getElementById('shipmentList');
+
+      if (!shipments || shipments.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state" style="padding:32px 16px;">
+            <div class="icon">📭</div>
+            <h3>No active shipments</h3>
+            <p style="font-size:13px;margin-top:6px;">We could not find shipments for this account</p>
+          </div>`;
+        return;
+      }
+
+      list.innerHTML = shipments.map(t => {
+        const img = t.product?.image
+          ? `<img src="${t.product.image}" class="shipment-img" alt="">`
+          : `<div class="shipment-img placeholder">📦</div>`;
+
+        return `
+          <div class="shipment-card" onclick="goToTrack('${t.trackingNumber}')">
+            ${img}
+            <div class="shipment-info">
+              <div class="tn">#${t.trackingNumber}</div>
+              <div class="product">${escapeHtml(t.product?.name || 'Package')}</div>
+              <div class="route">${escapeHtml(t.origin?.name || '')} → ${escapeHtml(t.destination?.name || '')}</div>
+            </div>
+            <div class="shipment-status">
+              <span class="badge ${getStatusClass(t.status)}">${t.status}</span>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // Initial render from session
+    renderShipments(ctx.shipments || []);
+
+    // Refresh from server so data is always up to date
+    api.getCustomerShipments(ctx.email)
+      .then(res => {
+        if (res.success && res.data) {
+          const updated = {
+            name: ctx.name,
+            email: ctx.email,
+            phone: ctx.phone || '',
+            shipments: res.data,
+            lastTracking: ctx.lastTracking
+          };
+          sessionStorage.setItem('deliveryUser', JSON.stringify(updated));
+          renderShipments(res.data);
+        }
+      })
+      .catch(() => {});
+
+    // ========== SEARCH ANOTHER TRACKING ==========
+    async function doSearch() {
+      const tn = document.getElementById('searchInput').value.trim().toUpperCase();
+      if (!tn) {
+        showToast('Please enter a tracking number');
+        return;
+      }
+
+      const btn = document.getElementById('searchBtn');
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      try {
+        const res = await api.lookup(tn);
+        if (!res.success || !res.data) {
+          showToast(res.message || 'Tracking not found');
+          return;
+        }
+
+        const { customer, shipments, current } = res.data;
+        sessionStorage.setItem('deliveryUser', JSON.stringify({
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone || '',
+          shipments: shipments || [],
+          lastTracking: current.trackingNumber
+        }));
+
+        // Update UI for the new customer
+        document.getElementById('userName').textContent = customer.name;
+        document.getElementById('userAvatar').textContent = (customer.name || '?').charAt(0).toUpperCase();
+        renderShipments(shipments);
+        showToast(`Showing shipments for ${customer.name}`);
+      } catch (err) {
+        showToast(err.message || 'Tracking not found');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔍';
+      }
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', doSearch);
+    document.getElementById('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    function goToTrack(tn) {
+      window.location.href = `track.html?tn=${encodeURIComponent(tn)}`;
+    }
+
+    function clearSession() {
+      sessionStorage.removeItem('deliveryUser');
+      window.location.href = 'index.html';
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+  </script>
+</body>
+</html>
